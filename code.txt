@@ -1,0 +1,124 @@
+#include <iostream>
+#include <vector>
+#include <stack>
+#include <chrono>
+#include <random>
+
+using Point = std::pair<int, int>;
+
+// А) Стек на фиксированном массиве
+class ArrayStack {
+    inline static Point arr[1000005];
+    int count = 0;
+public:
+    void push(Point p) { arr[count++] = p; }
+    void pop() { count--; }
+    Point top() { return arr[count - 1]; }
+    bool empty() { return count == 0; }
+};
+
+// Б) Стек на связанном списке
+class ListStack {
+    struct Node { Point d; Node* n; } *h = nullptr;
+public:
+    ~ListStack() { while (!empty()) pop(); }
+    void push(Point p) { h = new Node{ p, h }; }
+    void pop() { Node* tmp = h; h = h->n; delete tmp; }
+    Point top() { return h->d; }
+    bool empty() { return !h; }
+};
+
+// В) Стек из STL
+class STLStack : public std::stack<Point> {};
+
+// Направления движения: Вверх, Влево, Вправо, Вниз
+int dx[] = { -1, 0, 0, 1 }, dy[] = { 0, -1, 1, 0 };
+
+template <typename S>
+bool findPath(std::vector<std::vector<int>>& maze, Point start, Point end, bool any, int N, int M) {
+    if (maze[start.first][start.second] || (!any && maze[end.first][end.second])) return false;
+
+    S s; s.push(start);
+    std::vector<int> par(N * M, -1);
+    std::vector<bool> vis(N * M, false);
+    Point exitNode = { -1, -1 };
+
+    while (!s.empty()) {
+        Point curr = s.top(); s.pop();
+
+        int currIdx = curr.first * M + curr.second;
+        if (vis[currIdx]) continue;
+        vis[currIdx] = true;
+
+        if ((!any && curr == end) || (any && curr.first == N - 1 && !maze[curr.first][curr.second])) {
+            exitNode = curr; break;
+        }
+
+        for (int i = 0; i < 4; ++i) {
+            int nx = curr.first + dx[i], ny = curr.second + dy[i];
+            int nextIdx = nx * M + ny;
+            if (nx >= 0 && nx < N && ny >= 0 && ny < M && !maze[nx][ny] && !vis[nextIdx]) {
+                if (par[nextIdx] == -1) {
+                    par[nextIdx] = currIdx;
+                }
+                s.push({ nx, ny });
+            }
+        }
+    }
+    if (exitNode.first == -1) return false;
+    for (int id = exitNode.first * M + exitNode.second; id != -1; id = par[id])
+        maze[id / M][id % M] = 1;
+    return true;
+}
+
+template <typename S>
+void run(const std::vector<std::vector<int>>& m, const std::vector<Point>& in, const std::vector<Point>& out, int N, int M) {
+    auto start = std::chrono::high_resolution_clock::now();
+    auto mA = m, mB = m; bool sA = true, sB = true;
+    for (size_t i = 0; i < in.size(); ++i) if (!findPath<S>(mA, in[i], out[i], false, N, M)) { sA = false; break; }
+    for (size_t i = 0; i < in.size(); ++i) if (!findPath<S>(mB, in[i], out[0], true, N, M)) { sB = false; break; }
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << (sA ? "УСПЕХ" : "КРАХ") << " | " << (sB ? "УСПЕХ" : "КРАХ") << " | "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " мкс\n";
+}
+
+int main() {
+    std::setlocale(LC_ALL, "Russian");
+
+    int N = 1000, M = 1000;
+    std::vector<std::vector<int>> maze(N, std::vector<int>(M, 0));
+
+    // 1. Генерируем случайные стены (25% плотности)
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 100);
+
+    int wallDensity = 25;
+
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < M; ++j) {
+            if (dis(gen) < wallDensity) {
+                maze[i][j] = 1;
+            }
+        }
+    }
+
+    // 2. Устанавливаем соосные точки входа и выхода (по колонкам 0, 2, 4)
+    std::vector<Point> in = { {0, 0}, {0, 2}, {0, 4} };
+    std::vector<Point> out = { {N - 1, 0}, {N - 1, 2}, {N - 1, 4} };
+
+    // 3. Пробиваем сквозные вертикальные трассы от входов прямо до выходов.
+    // Теперь DFS гарантированно дойдет сверху вниз, преодолевая любые боковые тупики.
+    for (int i = 0; i < N; ++i) {
+        maze[i][0] = 0;
+        maze[i][2] = 0;
+        maze[i][4] = 0;
+    }
+    std::cout << "Кучугурный Денис Дмитриевич РПИб-о25\n\n";
+
+    std::cout << "Массив: "; run<ArrayStack>(maze, in, out, N, M);
+    std::cout << "Список: "; run<ListStack>(maze, in, out, N, M);
+    std::cout << "STL:    "; run<STLStack>(maze, in, out, N, M);
+
+    return 0;
+}
